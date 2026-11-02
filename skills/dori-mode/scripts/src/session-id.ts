@@ -60,6 +60,8 @@ export const resolveSession = async (pane: string, cwd: string, table: readonly 
     const m = SESSION_FILE.exec(name);
     const at = m ? Date.parse(`${m[1]}:${m[2]}:${m[3]}.${m[4]}Z`) : Number.NaN;
     return m?.[5] && at >= started - 5_000 && at <= started + START_WINDOW_MS ? [{ id: m[5], at }] : [];
-  }).sort((a, b) => a.at - b.at);
-  return near[0] ? { id: near[0].id, via: "start-time", pid: agent.pid } : { id: "", via: "none", pid: agent.pid };
+  });
+  // Two lanes started close together in one directory both have a file in the window; neither can be told apart by time,
+  // so only a single candidate names this lane's session, and an ambiguous window stays unresolved.
+  return near.length === 1 && near[0] ? { id: near[0].id, via: "start-time", pid: agent.pid } : { id: "", via: "none", pid: agent.pid };
 };
