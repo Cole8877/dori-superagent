@@ -9,6 +9,8 @@ export type SessionHit = { readonly id: string; readonly via: "argv" | "child-en
 // omo runs as senpi's bundled cli.js or the `omo` launcher; omp is one compiled `omp` binary. Both set PI_SESSION_ID for children.
 const AGENT = /senpi\/dist\/bundle\/cli\.js|(^|\/)om[op](\s|$)/;
 const ENV_ID = /(?:^|\s)PI_SESSION_ID=([0-9a-f-]{36})(?:\s|$)/;
+// A provider bridge (a Claude-subscription lane runs `claude --output-format stream-json`) holds no session of its own.
+const PROVIDER_BRIDGE = /(^|\/)claude\s.*--output-format[= ]stream-json/;
 const SESSION_FILE = /^(\d{4}-\d\d-\d\dT\d\d)-(\d\d)-(\d\d)-(\d{3})Z_([0-9a-f-]{36})\.jsonl$/;
 const START_WINDOW_MS = 180_000;
 
@@ -43,10 +45,13 @@ export const resolveSession = async (pane: string, cwd: string, table: readonly 
   const flagAt = argv.indexOf("--session");
   const fromFlag = flagAt >= 0 ? (argv[flagAt + 1] ?? "") : "";
   if (fromFlag) return { id: fromFlag, via: "argv", pid: agent.pid };
-  for (const child of descendants(table, agent.pid).slice(0, 40)) {
-    const env = await deps.run(["ps", "eww", "-o", "command=", "-p", String(child.pid)]);
-    const hit = ENV_ID.exec(env.out);
-    if (hit?.[1]) return { id: hit[1], via: "child-env", pid: agent.pid };
+  const envId = async (pid: number) => ENV_ID.exec((await deps.run(["ps", "eww", "-o", "command=", "-p", String(pid)])).out)?.[1];
+  // The agent's own launch environment can carry the PI_SESSION_ID of whoever launched it (a lead), and children that
+  // only inherit it carry the same value. Only an id the agent set itself, so one that differs, names its session.
+  const inherited = await envId(agent.pid);
+  for (const child of descendants(table, agent.pid).filter((p) => !PROVIDER_BRIDGE.test(p.cmd)).slice(0, 40)) {
+    const id = await envId(child.pid);
+    if (id && id !== inherited) return { id, via: "child-env", pid: agent.pid };
   }
   const started = Date.parse((await deps.run(["ps", "-o", "lstart=", "-p", String(agent.pid)])).out);
   if (Number.isNaN(started)) return { id: "", via: "none", pid: agent.pid };

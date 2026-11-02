@@ -206,6 +206,36 @@ test("the session id is read from --session, then a child's environment, then th
   expect(byStart).toEqual({ id: "01a11440-ee81-7f90-b2ed-dcc7d51a0adf", via: "start-time", pid: 11 });
 });
 
+const LEAD_ID = "01a15fb1-608b-753e-86e5-20c5ffb16bde";
+const LANE_ID = "01a19bc9-dfb8-79d1-98ea-b9d0f7552f42";
+const envRunner = (envs: Record<number, string>, extra: Record<string, string> = {}) => async (argv: readonly string[]) => {
+  const line = argv.join(" ");
+  if (line.startsWith("herdr pane process-info")) return { code: 0, out: JSON.stringify({ result: { process_info: { shell_pid: 10 } } }), err: "" };
+  const pid = line.startsWith("ps eww -o command= -p ") ? Number(argv.at(-1)) : Number.NaN;
+  const out = envs[pid] ?? Object.entries(extra).find(([k]) => line.startsWith(k))?.[1];
+  return { code: out === undefined ? 1 : 0, out: out ?? "", err: "" };
+};
+const claudeLane = [
+  { pid: 10, ppid: 1, cmd: "-zsh" },
+  { pid: 11, ppid: 10, cmd: "/bin/bun /x/senpi/dist/bundle/cli.js --extension /x/plugin --model anthropic-subscription/claude-opus-5-5" },
+  { pid: 12, ppid: 11, cmd: "/bin/bun /x/runtime/dist/bundle/host" },
+  { pid: 13, ppid: 11, cmd: "/u/.local/bin/claude --output-format stream-json --verbose --input-format stream-json" },
+];
+
+test("a PI_SESSION_ID the agent only inherited from its launcher is not its session; an id it set for a child is", async () => {
+  const table = [...claudeLane.slice(0, 2), { pid: 12, ppid: 11, cmd: "bun /x/mcp/cli.js mcp" }, { pid: 14, ppid: 11, cmd: "bash -c true" }];
+  const run = envRunner({ 11: `bun cli.js PI_SESSION_ID=${LEAD_ID}`, 12: `bun mcp PI_SESSION_ID=${LEAD_ID}`, 14: `bash PI_SESSION_ID=${LANE_ID}` });
+  expect(await resolveSession("w:p1", "/repo", table, { run, sessionsDir: "/s" })).toEqual({ id: LANE_ID, via: "child-env", pid: 11 });
+});
+
+test("a Claude-subscription lane skips its provider bridge and is found by the session file made at start", async () => {
+  const listDir = () => [`2026-01-01T12-00-01-920Z_${LANE_ID}.jsonl`];
+  const deps = (envs: Record<number, string>) => ({ run: envRunner(envs, { "ps -o lstart=": "Thu Jan  1 12:00:01 2026 GMT" }), sessionsDir: "/s", listDir });
+  const want = { id: LANE_ID, via: "start-time" as const, pid: 11 };
+  expect(await resolveSession("w:p1", "/repo", claudeLane, deps({ 11: "bun cli.js X=1", 12: "bun host X=1", 13: `claude PI_SESSION_ID=${LEAD_ID}` }))).toEqual(want);
+  expect(await resolveSession("w:p1", "/repo", claudeLane, deps({ 11: `bun cli.js PI_SESSION_ID=${LEAD_ID}`, 12: "bun host X=1", 13: `claude PI_SESSION_ID=${LEAD_ID}` }))).toEqual(want);
+});
+
 test("an omp lane's session id is found from the omp binary's child environment", async () => {
   const info = JSON.stringify({ result: { process_info: { shell_pid: 10 } } });
   const run = async (argv: readonly string[]) => {

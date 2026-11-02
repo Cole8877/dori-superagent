@@ -43,6 +43,14 @@ test("an unknown agent is refused instead of silently launching omo", async () =
   await expect(loadConfig(path, "/home/ana")).rejects.toThrow('config agent must be "omo" or "omp"');
 });
 
+test("a lead session without the instance's own herdr session is refused", async () => {
+  const path = join(state.dir, "lead.json");
+  await Bun.write(path, JSON.stringify({ leadPane: "w8:p7", leadSession: "default" }));
+  await expect(loadConfig(path, "/home/ana")).rejects.toThrow("config leadSession needs herdrSession");
+  await Bun.write(path, JSON.stringify({ leadPane: "w8:p7", leadSession: "default", herdrSession: "omo-delegate" }));
+  expect((await loadConfig(path, "/home/ana")).herdrSession).toBe("omo-delegate");
+});
+
 test("hook templates fill each argument separately, so text with spaces or quotes stays one argument", () => {
   const argv = fill(["notify", "--thread", "{thread}", "--text", "{text}"], { thread: "chat:1/2", text: `it's "done"; rm -rf /` });
   expect(argv).toEqual(["notify", "--thread", "chat:1/2", "--text", `it's "done"; rm -rf /`]);

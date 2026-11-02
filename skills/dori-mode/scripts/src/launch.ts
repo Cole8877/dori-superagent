@@ -26,12 +26,15 @@ export const validateLaunch = async (deps: FlowDeps, input: LaunchInput): Promis
   if (errors.length) throw new LaunchError(`Done line is not checkable: ${errors.join("; ")}`);
 };
 
-export const footer = (lane: Lane, leadPane: string): string => [
+const leadAddress = (leadPane: string, leadSession: string): string =>
+  `pane ${leadPane || "(lead pane)"}${leadSession ? ` in herdr session ${leadSession} (herdr --session ${leadSession} pane send-text ${leadPane} ...; your own session is a different one)` : ""}`;
+
+export const footer = (lane: Lane, leadPane: string, leadSession = ""): string => [
   "",
   "## Lane footer (written by dori launch)",
   `- Key: ${lane.key}. Work thread: ${lane.thread}.`,
   `- Done = ${lane.done}. The lane closes only when every signal reads back live.`,
-  `- Report to the lead at each milestone: [REPORT] ${lane.key} | <milestone|blocker|question|done> | <what, with links>, sent to pane ${leadPane || "(lead pane)"} as an argv array, never a shell string.`,
+  `- Report to the lead at each milestone: [REPORT] ${lane.key} | <milestone|blocker|question|done> | <what, with links>, sent to ${leadAddress(leadPane, leadSession)} as an argv array, never a shell string.`,
   `- When done: dori claim-done ${lane.key} --evidence "<merge SHA, closed issue, version>". See references/done-protocol.md.`,
   "",
 ].join("\n");
@@ -50,7 +53,7 @@ export const launchLane = async (deps: FlowDeps, input: LaunchInput): Promise<{ 
   const briefFile = Bun.file(input.brief);
   if (!(await briefFile.exists())) throw new LaunchError(`brief not found: ${input.brief}`);
   const draft: Lane = { key: input.key, title: input.title, thread: input.thread ?? "none", brief: input.brief, done: input.done, cwd, model, openedAt: iso(deps.clock) };
-  await Bun.write(input.brief, `${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane)}`);
+  await Bun.write(input.brief, `${(await briefFile.text()).replace(/\s*$/, "")}\n${footer(draft, deps.config.leadPane, deps.config.leadSession === deps.config.herdrSession ? "" : deps.config.leadSession)}`);
   const created = await deps.run(["herdr", "tab", "create", ...(deps.config.laneWorkspace ? ["--workspace", deps.config.laneWorkspace] : []), "--cwd", cwd, "--label", input.key, "--no-focus"]);
   if (created.code !== 0) throw new LaunchError(`herdr tab create failed: ${created.err || created.out}`);
   const made = (JSON.parse(created.out) as { result: { root_pane: { pane_id: string; tab_id?: string }; tab_id?: string } }).result;

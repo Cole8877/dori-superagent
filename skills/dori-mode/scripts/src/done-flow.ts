@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 
 import { type DoriConfig, fill } from "./config.ts";
-import { type Lane, type Registry, statusOf, withStatus } from "./registry.ts";
-import { type Clock, iso, type Runner } from "./run.ts";
+import { type Lane, Registry, statusOf, withStatus } from "./registry.ts";
+import { type Clock, iso, pinHerdrSession, type Runner } from "./run.ts";
 import { sendVerified } from "./panes.ts";
 import { checkDone, type SignalIo } from "./signals.ts";
 
@@ -14,6 +14,9 @@ export type FlowDeps = {
   readonly exists?: (path: string) => boolean;
   readonly signalIo?: SignalIo;
 };
+
+/** The deps the CLI runs with: every herdr call goes to config.herdrSession. */
+export const flowDeps = (config: DoriConfig, run: Runner, clock: Clock): FlowDeps => ({ run: pinHerdrSession(run, config.herdrSession), clock, registry: new Registry(config.stateDir), config });
 
 const signalIo = (deps: FlowDeps, lane: Lane): SignalIo => ({ cwd: lane.cwd ?? deps.config.defaultCwd, ...deps.signalIo });
 

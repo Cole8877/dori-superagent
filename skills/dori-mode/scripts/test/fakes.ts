@@ -3,8 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { type DoriConfig, defaultConfig } from "../src/config.ts";
-import type { FlowDeps } from "../src/done-flow.ts";
-import { Registry } from "../src/registry.ts";
+import { type FlowDeps, flowDeps } from "../src/done-flow.ts";
 import type { Clock, Ran, Runner } from "../src/run.ts";
 
 export type World = {
@@ -19,6 +18,8 @@ export type World = {
   onEnterStatus?: string;
   /** Screens returned by successive reads; falls back to `screen` when empty. */
   screens?: string[];
+  /** Panes of other herdr sessions, reached with `herdr --session <name>`. `panes` is the caller's own session. */
+  sessions?: Record<string, World["panes"]>;
   calls: string[][];
 };
 
@@ -26,9 +27,12 @@ export const WT = "/repo/.wt/demo-lane";
 
 export const newWorld = (): World => ({ prState: "MERGED", issueState: "CLOSED", aheadCount: "0", dirty: "", stuckReads: 0, screen: "❯ ", panes: [], calls: [] });
 
-export const fakeRunner = (w: World): Runner => async (argv) => {
-  w.calls.push([...argv]);
+export const fakeRunner = (w: World): Runner => async (raw) => {
+  w.calls.push([...raw]);
   const ok = (out = ""): Ran => ({ code: 0, out, err: "" });
+  const session = raw[0] === "herdr" && raw[1] === "--session" ? (raw[2] ?? "") : undefined;
+  const argv = session === undefined ? raw : ["herdr", ...raw.slice(3)];
+  const panes = session === undefined ? w.panes : (w.sessions?.[session] ?? []);
   const [cmd, a1, a2] = argv;
   if (cmd === "herdr" && a1 === "pane" && a2 === "read") {
     if (w.stuckReads > 0) {
@@ -38,11 +42,12 @@ export const fakeRunner = (w: World): Runner => async (argv) => {
     return ok(w.screens?.length ? (w.screens.shift() ?? w.screen) : w.screen);
   }
   if (cmd === "herdr" && a1 === "pane" && a2 === "send-keys" && w.onEnterStatus) {
-    const p = w.panes.find((x) => x.pane_id === argv[3]);
+    const p = panes.find((x) => x.pane_id === argv[3]);
     if (p) p.agent_status = w.onEnterStatus;
     return ok();
   }
-  if (cmd === "herdr" && a1 === "pane" && a2 === "list") return ok(JSON.stringify({ result: { panes: w.panes } }));
+  if (cmd === "herdr" && a1 === "pane" && a2 === "list") return ok(JSON.stringify({ result: { panes } }));
+  if (cmd === "herdr" && a1 === "pane" && a2 === "process-info") return ok(JSON.stringify({ result: { process_info: {} } }));
   if (cmd === "herdr") return ok();
   if (cmd === "git" && argv.includes("worktree") && argv.includes("list")) return ok(`worktree /repo\nbranch refs/heads/main\n\nworktree ${WT}\nbranch refs/heads/demo-lane`);
   if (cmd === "git" && argv.includes("status")) return ok(w.dirty);
@@ -66,7 +71,7 @@ export const withState = (): { dir: string; done: () => void } => {
 
 export const depsFor = (w: World, clock: Clock, stateDir: string, patch: Partial<DoriConfig> = {}): FlowDeps => {
   const config: DoriConfig = { ...defaultConfig("/home/test"), stateDir, defaultCwd: "/repo", leadPane: "lead:p1", ...patch };
-  return { run: fakeRunner(w), clock, registry: new Registry(stateDir), config, exists: () => true };
+  return { ...flowDeps(config, fakeRunner(w), clock), exists: () => true };
 };
 
-export const sent = (w: World): string[] => w.calls.filter((c) => c[0] === "herdr" && c[2] === "send-text").map((c) => c[4] ?? "");
+export const sent = (w: World): string[] => w.calls.map((c) => (c[1] === "--session" ? [c[0] ?? "", ...c.slice(3)] : c)).filter((c) => c[0] === "herdr" && c[2] === "send-text").map((c) => c[4] ?? "");

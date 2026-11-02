@@ -3,13 +3,13 @@ import { parseArgs } from "node:util";
 
 import { loadConfig } from "./config.ts";
 import { deadPaneTick, newDeadPaneState } from "./dead-panes.ts";
-import { claimDone, closeLane, type FlowDeps, objectDone, watchTick } from "./done-flow.ts";
+import { claimDone, closeLane, flowDeps, objectDone, watchTick } from "./done-flow.ts";
 import { freshnessTick } from "./freshness.ts";
 import { acquireSlot, pidAlive, releaseSlot } from "./heavy-slot.ts";
 import { guardTick, sampleHost } from "./host-guard.ts";
 import { adoptLane, launchLane, LaunchError } from "./launch.ts";
 import { pauseLane, resumeLane } from "./pause.ts";
-import { Registry, statusOf } from "./registry.ts";
+import { statusOf } from "./registry.ts";
 import { realClock, run } from "./run.ts";
 import { syncRegistry } from "./sync.ts";
 import { canLaunch } from "./routing.ts";
@@ -52,7 +52,7 @@ const die = (message: string, code = 1): never => {
 };
 
 const config = await loadConfig();
-const deps: FlowDeps = { run, clock: realClock, registry: new Registry(config.stateDir), config };
+const deps = flowDeps(config, run, realClock);
 const [command = "", ...rest] = process.argv.slice(2);
 
 const flags = parseArgs({
@@ -146,7 +146,7 @@ try {
       const seen = new Set<string>();
       const paneState = newDeadPaneState();
       await every(loopMin, async () => {
-        for (const line of await deadPaneTick(run, config, seen, new Date().toISOString().slice(0, 13), paneState)) console.log(line);
+        for (const line of await deadPaneTick(deps.run, config, seen, new Date().toISOString().slice(0, 13), paneState)) console.log(line);
       });
       break;
     }
@@ -154,7 +154,7 @@ try {
       const state = { alerting: false };
       console.log("HOST_GUARD_READY");
       await every(loopMin, async () => {
-        for (const line of guardTick(await sampleHost(run), config.guard, state)) console.log(line);
+        for (const line of guardTick(await sampleHost(deps.run), config.guard, state)) console.log(line);
       });
       break;
     }
@@ -163,7 +163,7 @@ try {
       const label = rest[0];
       const cmd = sep >= 0 ? rest.slice(sep + 1) : [];
       if (!label || label === "--" || !cmd.length) die("usage: dori heavy <label> -- <command ...>");
-      const load = async () => (await sampleHost(run)).load1;
+      const load = async () => (await sampleHost(deps.run)).load1;
       const slot = await acquireSlot({ dir: `${config.stateDir}/heavy`, slots: config.heavySlots, maxLoad: config.heavyMaxLoad, clock: realClock, load, alive: pidAlive, pid: process.pid }, label ?? "");
       try {
         const child = Bun.spawn(cmd, { stdout: "inherit", stderr: "inherit", stdin: "inherit" });
@@ -174,7 +174,7 @@ try {
       break;
     }
     case "can-launch": {
-      const v = canLaunch(await sampleHost(run), config.guard);
+      const v = canLaunch(await sampleHost(deps.run), config.guard);
       console.log(v.ok ? "CAN_LAUNCH" : `HOLD ${v.reasons.join(" | ")}`);
       process.exit(v.ok ? 0 : 4);
     }
