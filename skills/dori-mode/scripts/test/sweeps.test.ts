@@ -205,3 +205,15 @@ test("the session id is read from --session, then a child's environment, then th
   const byStart = await resolveSession("w:p1", "/repo", table, { run: fake({ "ps eww": "bun mcp X=1", "ps -o lstart=": "Thu Jan  1 12:00:01 2026 GMT" }), sessionsDir: "/s", listDir });
   expect(byStart).toEqual({ id: "01a11440-ee81-7f90-b2ed-dcc7d51a0adf", via: "start-time", pid: 11 });
 });
+
+test("an omp lane's session id is found from the omp binary's child environment", async () => {
+  const info = JSON.stringify({ result: { process_info: { shell_pid: 10 } } });
+  const run = async (argv: readonly string[]) => {
+    const line = argv.join(" ");
+    if (line.startsWith("herdr pane process-info")) return { code: 0, out: info, err: "" };
+    if (line === "ps eww -o command= -p 12") return { code: 0, out: "python -u prelude.py PI_SESSION_ID=01a185d7-0000-7000-8000-000000000001 X=1", err: "" };
+    return { code: 1, out: "", err: "" };
+  };
+  const table = [{ pid: 10, ppid: 1, cmd: "-zsh" }, { pid: 11, ppid: 10, cmd: "omp --model anthropic/claude-opus-5-5 --goal ulw set goal and work" }, { pid: 12, ppid: 11, cmd: "python -u prelude.py" }];
+  expect(await resolveSession("w:p1", "/repo", table, { run, sessionsDir: "/s" })).toEqual({ id: "01a185d7-0000-7000-8000-000000000001", via: "child-env", pid: 11 });
+});

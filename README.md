@@ -87,7 +87,9 @@ State is JSON on disk under `~/.dori` (or `$DORI_HOME`): `lanes/`, `inbox/`, `br
 
 ## Quick start
 
-You need Bun 1.3 or newer, herdr, omo, and the GitHub CLI `gh` (used for PR head SHAs, checks and the merge).
+You need Bun 1.3 or newer, herdr, omo (or omp, see below), and the GitHub CLI `gh` (used for PR head SHAs, checks and the merge).
+
+To run every role on [omp](https://github.com/can1357/oh-my-pi) instead, set `DORI_AGENT_CMD=omp` and run `herdr integration install omp`; the harness calls only flags both share (`--append-system-prompt`, a positional prompt, `-p --no-session --model`). Without that integration herdr reports an omp pane as a plain shell, so a busy lane is never queued for. Dori mode has its own switch: `"agent": "omp"` in its config ([setup](skills/dori-mode/references/setup.md#running-lanes-on-omp)).
 
 ```sh
 git clone https://github.com/sisyphuslabs/dori-superagent
@@ -132,7 +134,7 @@ dori merge owner/repo#12             # gh pr merge --squash --match-head-commit 
 dori done fix-flaky-login            # closes the lane's pane; only a READY lane can be closed
 ```
 
-`dori send <lead|duty|key|pane> --text '...'` delivers a message to a pane, or queues it when the pane is busy. `dori role <lead|duty> [PANE]` registers a pane by hand when you did not use `dori up`. `--text` can be left off to read the message from stdin. The commands the agents see are rendered with the full path to `src/cli.ts` and `DORI_HOME` set, so `dori` does not need to be on their PATH. Environment: `DORI_HOME` (state directory, default `~/.dori`), `DORI_AGENT_CMD` (default `omo`), `DORI_HERDR_SESSION` (a named herdr session), `DORI_CMD` (how the agents are told to call dori).
+`dori send <lead|duty|key|pane> --text '...'` delivers a message to a pane, or queues it when the pane is busy. `dori role <lead|duty> [PANE]` registers a pane by hand when you did not use `dori up`. `--text` can be left off to read the message from stdin. The commands the agents see are rendered with the full path to `src/cli.ts` and `DORI_HOME` set, so `dori` does not need to be on their PATH. Environment: `DORI_HOME` (state directory, default `~/.dori`), `DORI_AGENT_CMD` (default `omo`; `omp` works too), `DORI_HERDR_SESSION` (a named herdr session), `DORI_CMD` (how the agents are told to call dori).
 
 ## What the harness enforces
 

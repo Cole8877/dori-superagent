@@ -96,6 +96,33 @@ test("a not-done lane can be paused, and resume restores not-done and restarts t
   expect(sent(world)).toEqual(["/goal pause", "/goal resume"]);
 });
 
+// omp 18.13 prints its own goal lines; these screens are the text a real omp pane showed.
+test("an omp lane pauses and resumes on omp's goal lines", async () => {
+  paneStatus("working");
+  await deps(T0).registry.write(working);
+  paneSays("❯ ", " Goal mode paused.\n  ⎋ Running sleep 25\n");
+  const paused = await pauseLane(deps(T0 + MIN), working, "wait");
+  expect(paused).toMatchObject({ code: 0, lines: ["PAUSED waiting-lane goal paused, running turn interrupted"] });
+
+  paneStatus("idle");
+  paneSays(" Goal mode paused.\n", " Goal mode paused.\n Goal mode resumed.\n");
+  const resumed = await resumeLane(deps(T0 + 90 * MIN), paused.lane, "go");
+  expect(resumed).toMatchObject({ code: 0, lines: ["RESUMED waiting-lane as working, goal resumed"] });
+});
+
+test("an omp lane with no goal pauses: omp's no-goal warning means nothing can auto-continue", async () => {
+  await deps(T0).registry.write(working);
+  paneSays("❯ ", " Warning: No active goal to pause.\n");
+  expect(await pauseLane(deps(T0 + MIN), working, "wait")).toMatchObject({ code: 0, lines: ["PAUSED waiting-lane goal paused"] });
+});
+
+test("an omp line that only mentions the goal state does not confirm a pause", async () => {
+  paneStatus("working");
+  await deps(T0).registry.write(working);
+  world.screen = " I'll check whether Goal mode paused. was printed\n";
+  expect((await pauseLane(deps(T0 + MIN), working, "wait")).code).toBe(3);
+});
+
 test("resume of a working lane restarts the quiet clock: no nudge until nudgeAfterMin after the resume", async () => {
   const paused: Lane = { ...working, status: "paused", history: [{ at: new Date(T0).toISOString(), status: "paused", note: "wait" }] };
   await deps(T0).registry.write(paused);
