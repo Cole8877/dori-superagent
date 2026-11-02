@@ -21,6 +21,7 @@ Needs: bun 1.3+, herdr, git, and the GitHub CLI (`gh`) for `merged`/`closed` sig
 | Field | Default | Used by |
 |---|---|---|
 | `stateDir` | `~/.dori/state` | registry, heavy slots |
+| `peerStateDirs` | none | `sync` only: the state directories of other dori instances on this host (for example the omp instance's, from the omo one). Their open lanes are listed with status `peer:<status>`; they are read, never written, closed, nudged or checked for drift, and a missing directory is no lanes. Must not include this instance's own `stateDir` |
 | `laneWorkspace` | current workspace | `launch` |
 | `workspaces` | all | `sync`, `dead-panes` |
 | `ignorePanes`, `leadPane` | none | panes the sweeps skip; `leadPane` is also where lanes report |
@@ -67,7 +68,7 @@ Opens a lane: appends the footer to the brief, opens a tab, starts the agent, an
 Registers a lane that is already running.
 
 ### `dori sync [--write]`
-Prints `key | thread | pane | session | status` for every open lane and every unregistered agent pane, followed by drift. Read-only unless `--write`, which stores session ids.
+Prints `key | thread | pane | session | status` for every open lane and every unregistered agent pane, then the open lanes of each `peerStateDirs` instance as their own registry has them (status `peer:<status>`; a lane file that does not parse prints `PEER_UNREADABLE <file>`), followed by drift. Read-only unless `--write`, which stores session ids of this instance's own lanes only. Pane ids of peer lanes belong to the peer's herdr session and are not matched against this instance's panes.
 
 ### `dori claim-done [<key>] --evidence TEXT` / `dori object-done <key> --reason TEXT ...`
 The two halves of the done flow. Both message the lane's pane and check that Enter registered.

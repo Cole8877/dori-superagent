@@ -23,6 +23,8 @@ export type Agent = "omo" | "omp";
 export type DoriConfig = {
   readonly agent: Agent;
   readonly stateDir: string;
+  /** State directories of other dori instances. `sync` lists their open lanes marked peer; nothing here ever writes, closes or nudges them. */
+  readonly peerStateDirs: readonly string[];
   readonly laneWorkspace: string;
   readonly workspaces: readonly string[];
   readonly ignorePanes: readonly string[];
@@ -58,6 +60,7 @@ export const agentDefaults = (agent: Agent, home = homedir()): Pick<DoriConfig, 
 export const defaultConfig = (home = homedir(), agent: Agent = "omo"): DoriConfig => ({
   agent,
   stateDir: join(home, ".dori", "state"),
+  peerStateDirs: [],
   laneWorkspace: "",
   workspaces: [],
   ignorePanes: [],
@@ -91,9 +94,13 @@ export const loadConfig = async (path = configPath(), home = homedir()): Promise
   const merged: DoriConfig = { ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks } };
   const leadSession = process.env.DORI_LEAD_SESSION ?? merged.leadSession;
   if (leadSession && !merged.herdrSession) throw new Error("config leadSession needs herdrSession: without it this instance's own session is whatever the caller's environment says");
+  const stateDir = expandHome(process.env.DORI_STATE_DIR ?? merged.stateDir, home);
+  const peerStateDirs = merged.peerStateDirs.map((d) => expandHome(d, home));
+  if (peerStateDirs.includes(stateDir)) throw new Error(`config peerStateDirs lists this instance's own stateDir ${stateDir}: its lanes would be listed twice, once as peer`);
   return {
     ...merged,
-    stateDir: expandHome(process.env.DORI_STATE_DIR ?? merged.stateDir, home),
+    stateDir,
+    peerStateDirs,
     defaultCwd: expandHome(merged.defaultCwd, home),
     sessionsDir: expandHome(merged.sessionsDir, home),
     leadPane: process.env.DORI_LEAD_PANE ?? merged.leadPane,
