@@ -13,6 +13,13 @@ export const run: Runner = async (argv, opts = {}) => {
   return { code: p.signalCode ? 124 : code, out: out.trim(), err: (p.signalCode ? `killed by ${p.signalCode} (timeout)` : err).trim() };
 };
 
+/**
+ * Sends every herdr call to one named session. `--session` wins over HERDR_SOCKET_PATH and HERDR_SESSION in the caller's
+ * environment, so a Dori started from a pane of another session still lists and drives its own lanes. Empty: unchanged.
+ */
+export const pinHerdrSession = (inner: Runner, session: string): Runner =>
+  session ? (argv, opts) => inner(argv[0] === "herdr" ? ["herdr", "--session", session, ...argv.slice(1)] : argv, opts) : inner;
+
 export type Clock = { readonly now: () => number; readonly sleep: (ms: number) => Promise<void> };
 export const realClock: Clock = { now: () => Date.now(), sleep: (ms) => Bun.sleep(ms) };
 

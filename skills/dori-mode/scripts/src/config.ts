@@ -27,6 +27,10 @@ export type DoriConfig = {
   readonly workspaces: readonly string[];
   readonly ignorePanes: readonly string[];
   readonly leadPane: string;
+  /** herdr session every herdr call of this instance targets. Empty follows the caller's herdr environment. */
+  readonly herdrSession: string;
+  /** herdr session the lead pane lives in. Empty means herdrSession. */
+  readonly leadSession: string;
   readonly defaultCwd: string;
   readonly agentCommand: ArgvTemplate;
   readonly defaultModel: string;
@@ -58,6 +62,8 @@ export const defaultConfig = (home = homedir(), agent: Agent = "omo"): DoriConfi
   workspaces: [],
   ignorePanes: [],
   leadPane: "",
+  herdrSession: "",
+  leadSession: "",
   defaultCwd: home,
   ...agentDefaults(agent, home),
   defaultModel: "anthropic/claude-opus-5-5",
@@ -83,14 +89,20 @@ export const loadConfig = async (path = configPath(), home = homedir()): Promise
   if (agent !== "omo" && agent !== "omp") throw new Error(`config agent must be "omo" or "omp", got ${JSON.stringify(agent)}`);
   const base = defaultConfig(home, agent);
   const merged: DoriConfig = { ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks } };
+  const leadSession = process.env.DORI_LEAD_SESSION ?? merged.leadSession;
+  if (leadSession && !merged.herdrSession) throw new Error("config leadSession needs herdrSession: without it this instance's own session is whatever the caller's environment says");
   return {
     ...merged,
     stateDir: expandHome(process.env.DORI_STATE_DIR ?? merged.stateDir, home),
     defaultCwd: expandHome(merged.defaultCwd, home),
     sessionsDir: expandHome(merged.sessionsDir, home),
     leadPane: process.env.DORI_LEAD_PANE ?? merged.leadPane,
+    leadSession,
   };
 };
+
+/** The lead pane when it lives in this instance's herdr session, else "": a pane id is unique only within one session. */
+export const localLeadPane = (c: DoriConfig): string => (!c.leadSession || c.leadSession === c.herdrSession ? c.leadPane : "");
 
 export const fill = (template: ArgvTemplate, values: Readonly<Record<string, string>>): string[] =>
   template.map((part) => part.replace(/\{(\w+)\}/g, (whole, name: string) => values[name] ?? whole));

@@ -16,7 +16,7 @@ Needs: bun 1.3+, herdr, git, and the GitHub CLI (`gh`) for `merged`/`closed` sig
 
 ## Configuration
 
-`~/.dori/config.json` (or the path in `DORI_CONFIG`). Every field is optional; see `config.example.json`. `DORI_STATE_DIR` and `DORI_LEAD_PANE` override the file.
+`~/.dori/config.json` (or the path in `DORI_CONFIG`). Every field is optional; see `config.example.json`. `DORI_STATE_DIR`, `DORI_LEAD_PANE` and `DORI_LEAD_SESSION` override the file.
 
 | Field | Default | Used by |
 |---|---|---|
@@ -24,6 +24,8 @@ Needs: bun 1.3+, herdr, git, and the GitHub CLI (`gh`) for `merged`/`closed` sig
 | `laneWorkspace` | current workspace | `launch` |
 | `workspaces` | all | `sync`, `dead-panes` |
 | `ignorePanes`, `leadPane` | none | panes the sweeps skip; `leadPane` is also where lanes report |
+| `herdrSession` | the caller's herdr session | every herdr call (`herdr --session <name>`, which wins over `HERDR_SOCKET_PATH` and `HERDR_SESSION`); set it when lanes and the shell that runs dori are in different sessions |
+| `leadSession` | `herdrSession` | the session `leadPane` is in; when it differs, the sweeps do not skip that id in the lane session and the launch footer tells lanes to report with `herdr --session <leadSession>`. Needs `herdrSession` |
 | `defaultCwd` | home | where lanes start, and the repo whose worktrees they own |
 | `agent` | `omo` | picks the defaults of the next two rows: `omo` or `omp` |
 | `agentCommand`, `defaultModel`, `launchKeywords` | `omo --model {model} {prompt}`; with `agent: "omp"`, `omp --model {model} --goal {prompt}` | `launch` |

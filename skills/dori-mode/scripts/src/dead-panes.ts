@@ -1,4 +1,4 @@
-import type { DoriConfig } from "./config.ts";
+import { type DoriConfig, localLeadPane } from "./config.ts";
 import { ALIVE_STATUSES, listPanes, readScreen } from "./panes.ts";
 import type { Runner } from "./run.ts";
 
@@ -18,7 +18,7 @@ export const newDeadPaneState = (): DeadPaneState => ({ unknown: new Map(), last
 export const deadPaneTick = async (run: Runner, config: DoriConfig, seen: Set<string>, hourKey: string, state: DeadPaneState = newDeadPaneState()): Promise<string[]> => {
   const out: string[] = [];
   const watch = new Set(config.workspaces);
-  const skip = new Set([config.leadPane, ...config.ignorePanes].filter(Boolean));
+  const skip = new Set([localLeadPane(config), ...config.ignorePanes].filter(Boolean));
   const marked = (tail: string) => config.deadPanePatterns.some((p) => tail.includes(p.toLowerCase()));
   for (const pane of await listPanes(run)) {
     if (skip.has(pane.pane_id) || (watch.size > 0 && !watch.has(pane.workspace_id))) continue;
