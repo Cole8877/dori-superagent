@@ -247,3 +247,13 @@ test("an omp lane's session id is found from the omp binary's child environment"
   const table = [{ pid: 10, ppid: 1, cmd: "-zsh" }, { pid: 11, ppid: 10, cmd: "omp --model anthropic/claude-opus-5-5 --goal ulw set goal and work" }, { pid: 12, ppid: 11, cmd: "python -u prelude.py" }];
   expect(await resolveSession("w:p1", "/repo", table, { run, sessionsDir: "/s" })).toEqual({ id: "01a185d7-0000-7000-8000-000000000001", via: "child-env", pid: 11 });
 });
+
+test("two lanes started close together in one directory: an ambiguous start-time window is unresolved, never a neighbour's session", async () => {
+  const NEIGHBOUR = "01a10000-0000-7000-8000-000000000000";
+  const run = envRunner({ 11: `bun cli.js PI_SESSION_ID=${LEAD_ID}`, 12: `bun host PI_SESSION_ID=${LEAD_ID}`, 13: `claude PI_SESSION_ID=${LEAD_ID}` }, { "ps -o lstart=": "Thu Jan  1 12:00:02 2026 GMT" });
+  const both = () => [`2026-01-01T12-00-01-000Z_${NEIGHBOUR}.jsonl`, `2026-01-01T12-00-03-000Z_${LANE_ID}.jsonl`];
+  expect(await resolveSession("w:p1", "/repo", claudeLane, { run, sessionsDir: "/s", listDir: both })).toEqual({ id: "", via: "none", pid: 11 });
+  // a session file far outside the window is not a competitor
+  const farAway = () => [`2026-01-01T11-30-00-000Z_${NEIGHBOUR}.jsonl`, `2026-01-01T12-00-03-000Z_${LANE_ID}.jsonl`];
+  expect(await resolveSession("w:p1", "/repo", claudeLane, { run, sessionsDir: "/s", listDir: farAway })).toEqual({ id: LANE_ID, via: "start-time", pid: 11 });
+});
