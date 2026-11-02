@@ -8,9 +8,16 @@ herdr is the terminal multiplexer the Dori runs in. Every lane is a herdr tab, a
 
 ```sh
 curl -fsSL https://herdr.dev/install.sh | sh
-herdr integration install pi        # or the integration for the agent you run in
+herdr integration install pi        # omo; for omp lanes: herdr integration install omp
 herdr --skill                       # load its skill unless it is already in your context
 ```
+
+### Running lanes on omp
+
+Set `"agent": "omp"` in `~/.dori/config.json`. Lanes then start as `omp --model {model} --goal {prompt}`, and session ids are read from `~/.omp/agent/sessions`. omp needs two things omo has built in:
+
+- `herdr integration install omp`, so herdr reports the lane's agent state. Without it an omp lane reads as a plain shell and is never treated as busy.
+- The [omp-ulw](https://github.com/dbc-hbin/omp-ulw) extension (`ln -s <checkout> ~/.omp/agent/extensions/omp-ulw`), so the `ulw` launch keyword arms ultrawork. `--goal` opens the native goal that `dori pause` / `dori resume` act on; omp does not make one from a positional prompt.
 
 ## 2. Messenger
 

@@ -6,7 +6,8 @@ import type { Runner } from "./run.ts";
 export type Proc = { readonly pid: number; readonly ppid: number; readonly cmd: string };
 export type SessionHit = { readonly id: string; readonly via: "argv" | "child-env" | "start-time" | "none"; readonly pid?: number };
 
-const AGENT = /senpi\/dist\/bundle\/cli\.js|(^|\/)omo(\s|$)/;
+// omo runs as senpi's bundled cli.js or the `omo` launcher; omp is one compiled `omp` binary. Both set PI_SESSION_ID for children.
+const AGENT = /senpi\/dist\/bundle\/cli\.js|(^|\/)om[op](\s|$)/;
 const ENV_ID = /(?:^|\s)PI_SESSION_ID=([0-9a-f-]{36})(?:\s|$)/;
 const SESSION_FILE = /^(\d{4}-\d\d-\d\dT\d\d)-(\d\d)-(\d\d)-(\d{3})Z_([0-9a-f-]{36})\.jsonl$/;
 const START_WINDOW_MS = 180_000;

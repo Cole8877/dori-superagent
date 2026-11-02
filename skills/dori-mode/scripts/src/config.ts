@@ -17,7 +17,11 @@ export type GuardThresholds = {
   readonly panesMax: number;
 };
 
+/** The coding agent lanes run on. It picks the launch command and where session files live. */
+export type Agent = "omo" | "omp";
+
 export type DoriConfig = {
+  readonly agent: Agent;
   readonly stateDir: string;
   readonly laneWorkspace: string;
   readonly workspaces: readonly string[];
@@ -38,17 +42,26 @@ export type DoriConfig = {
   readonly hooks: Hooks;
 };
 
-export const defaultConfig = (home = homedir()): DoriConfig => ({
+/**
+ * Per-agent defaults; explicit config fields still win. omp needs the omp-ulw extension for `ulw`, and
+ * `--goal` so the lane starts with a native goal (omp creates none from a positional prompt).
+ */
+export const agentDefaults = (agent: Agent, home = homedir()): Pick<DoriConfig, "agentCommand" | "sessionsDir"> =>
+  agent === "omp"
+    ? { agentCommand: ["omp", "--model", "{model}", "--goal", "{prompt}"], sessionsDir: join(home, ".omp", "agent", "sessions") }
+    : { agentCommand: ["omo", "--model", "{model}", "{prompt}"], sessionsDir: join(home, ".omo", "agent", "sessions") };
+
+export const defaultConfig = (home = homedir(), agent: Agent = "omo"): DoriConfig => ({
+  agent,
   stateDir: join(home, ".dori", "state"),
   laneWorkspace: "",
   workspaces: [],
   ignorePanes: [],
   leadPane: "",
   defaultCwd: home,
-  agentCommand: ["omo", "--model", "{model}", "{prompt}"],
+  ...agentDefaults(agent, home),
   defaultModel: "anthropic/claude-opus-5-5",
   launchKeywords: "ulw set goal and work",
-  sessionsDir: join(home, ".omo", "agent", "sessions"),
   nudgeAfterMin: 15,
   postAfterMin: 20,
   closeAfterMin: 5,
@@ -64,9 +77,11 @@ export const configPath = (): string => process.env.DORI_CONFIG ?? join(homedir(
 export const expandHome = (path: string, home = homedir()): string => (path === "~" ? home : path.startsWith("~/") ? join(home, path.slice(2)) : path);
 
 export const loadConfig = async (path = configPath(), home = homedir()): Promise<DoriConfig> => {
-  const base = defaultConfig(home);
   const file = Bun.file(path);
   const raw = (await file.exists()) ? ((await file.json()) as Partial<DoriConfig>) : {};
+  const agent = raw.agent ?? "omo";
+  if (agent !== "omo" && agent !== "omp") throw new Error(`config agent must be "omo" or "omp", got ${JSON.stringify(agent)}`);
+  const base = defaultConfig(home, agent);
   const merged: DoriConfig = { ...base, ...raw, guard: { ...base.guard, ...raw.guard }, hooks: { ...base.hooks, ...raw.hooks } };
   return {
     ...merged,

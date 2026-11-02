@@ -25,8 +25,9 @@ Needs: bun 1.3+, herdr, git, and the GitHub CLI (`gh`) for `merged`/`closed` sig
 | `workspaces` | all | `sync`, `dead-panes` |
 | `ignorePanes`, `leadPane` | none | panes the sweeps skip; `leadPane` is also where lanes report |
 | `defaultCwd` | home | where lanes start, and the repo whose worktrees they own |
-| `agentCommand`, `defaultModel`, `launchKeywords` | `omo --model {model} {prompt}` | `launch` |
-| `sessionsDir` | `~/.omo/agent/sessions` | session-id lookup |
+| `agent` | `omo` | picks the defaults of the next two rows: `omo` or `omp` |
+| `agentCommand`, `defaultModel`, `launchKeywords` | `omo --model {model} {prompt}`; with `agent: "omp"`, `omp --model {model} --goal {prompt}` | `launch` |
+| `sessionsDir` | `~/.omo/agent/sessions`; with `agent: "omp"`, `~/.omp/agent/sessions` | session-id lookup |
 | `nudgeAfterMin`, `postAfterMin` | 15, 20 | `freshness` |
 | `closeAfterMin` | 5 | `watch` |
 | `heavySlots`, `heavyMaxLoad` | 1, 80 | `heavy` |
