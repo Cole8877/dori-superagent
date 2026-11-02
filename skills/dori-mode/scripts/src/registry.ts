@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync } from "node:fs";
 import { join } from "node:path";
 
 export const LANE_KEY = /^[a-z0-9][a-z0-9._-]{1,60}$/;
@@ -51,6 +51,29 @@ export const withStatus = (lane: Lane, status: LaneStatus, note: string, at: str
   status,
   history: [...(lane.history ?? []), { at, status, note }],
 });
+
+export type PeerLanes = { readonly lanes: Lane[]; readonly unreadable: string[] };
+
+/**
+ * Open lanes of another dori instance. Read-only: unlike `Registry`, it never creates the directory, and a
+ * missing directory is no lanes. A file that does not parse is reported, not fatal, so a peer cannot break this
+ * instance's own sync.
+ */
+export const readPeerLanes = async (stateDir: string): Promise<PeerLanes> => {
+  const dir = join(stateDir, "lanes");
+  if (!existsSync(dir)) return { lanes: [], unreadable: [] };
+  const lanes: Lane[] = [];
+  const unreadable: string[] = [];
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith(".json")) continue;
+    try {
+      lanes.push((await Bun.file(join(dir, f)).json()) as Lane);
+    } catch {
+      unreadable.push(join(dir, f));
+    }
+  }
+  return { lanes: lanes.filter((l) => statusOf(l) !== "closed"), unreadable };
+};
 
 export class Registry {
   readonly dir: string;

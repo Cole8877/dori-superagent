@@ -27,7 +27,7 @@ const USAGE = `dori <command> [options]
 
   launch <key> --title T --brief FILE --done "merged o/r#N; closed o/r#M" [--thread REF] [--model M] [--cwd DIR]
   adopt  <key> --pane ID --title T --brief FILE --done "..." [--thread REF]
-  sync   [--write]                     registry vs live panes; read-only unless --write
+  sync   [--write]                     registry vs live panes, plus peerStateDirs lanes (peer:*, never written); read-only unless --write
   claim-done [<key>] --evidence TEXT  key defaults to the lane registered for $HERDR_PANE_ID
   object-done <key> --reason TEXT [--reason TEXT ...]
   close  <key> [--note TEXT]           close now (Done signals must read back live)
@@ -105,7 +105,8 @@ try {
     case "sync": {
       const r = await syncRegistry(deps, Boolean(flags.values.write));
       console.log("key | thread | pane | session | status");
-      for (const row of [...r.rows, ...r.unregistered]) console.log([row.key, row.thread, row.pane, row.session, row.status].join(" | "));
+      for (const row of [...r.rows, ...r.unregistered, ...r.peers]) console.log([row.key, row.thread, row.pane, row.session, row.status].join(" | "));
+      for (const f of r.peerUnreadable) console.log(`PEER_UNREADABLE ${f}`);
       console.log(r.drift.length ? `DRIFT (${r.drift.length}):\n${r.drift.map((d) => `- ${d}`).join("\n")}` : "DRIFT none");
       console.log(flags.values.write ? "WROTE session ids" : "READ_ONLY");
       break;

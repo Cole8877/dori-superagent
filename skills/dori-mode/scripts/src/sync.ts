@@ -1,11 +1,11 @@
 import { localLeadPane } from "./config.ts";
 import type { FlowDeps } from "./done-flow.ts";
 import { listPanes } from "./panes.ts";
-import { statusOf } from "./registry.ts";
+import { readPeerLanes, statusOf } from "./registry.ts";
 import { procTable, resolveSession } from "./session-id.ts";
 
 export type SyncRow = { readonly key: string; readonly thread: string; readonly pane: string; readonly session: string; readonly status: string };
-export type SyncResult = { readonly rows: SyncRow[]; readonly drift: string[]; readonly unregistered: SyncRow[] };
+export type SyncResult = { readonly rows: SyncRow[]; readonly drift: string[]; readonly unregistered: SyncRow[]; readonly peers: SyncRow[]; readonly peerUnreadable: string[] };
 
 export const syncRegistry = async (deps: FlowDeps, write: boolean): Promise<SyncResult> => {
   const panes = await listPanes(deps.run);
@@ -33,5 +33,13 @@ export const syncRegistry = async (deps: FlowDeps, write: boolean): Promise<Sync
     const hit = await resolveSession(p.pane_id, p.cwd ?? "", table, { run: deps.run, sessionsDir: deps.config.sessionsDir });
     unregistered.push({ key: p.title ?? p.pane_id, thread: "-", pane: p.pane_id, session: hit.id ? `${hit.id} (${hit.via})` : "-", status: "unregistered" });
   }
-  return { rows, drift, unregistered };
+  // Peer lanes are shown as their own registry has them: no pane or session checks, no drift, never written.
+  const peers: SyncRow[] = [];
+  const peerUnreadable: string[] = [];
+  for (const dir of deps.config.peerStateDirs) {
+    const r = await readPeerLanes(dir);
+    peerUnreadable.push(...r.unreadable);
+    for (const l of r.lanes) peers.push({ key: l.key, thread: l.thread, pane: l.pane ?? "-", session: l.session ?? "-", status: `peer:${statusOf(l)}` });
+  }
+  return { rows, drift, unregistered, peers, peerUnreadable };
 };
