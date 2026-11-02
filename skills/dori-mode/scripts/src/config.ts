@@ -1,5 +1,6 @@
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 export type ArgvTemplate = readonly string[];
 
@@ -85,6 +86,25 @@ export const configPath = (): string => process.env.DORI_CONFIG ?? join(homedir(
 
 export const expandHome = (path: string, home = homedir()): string => (path === "~" ? home : path.startsWith("~/") ? join(home, path.slice(2)) : path);
 
+/**
+ * A directory's identity: absolute, dot segments and trailing slashes gone, symlinks resolved. A missing path resolves
+ * through its nearest existing ancestor and is never created, so two spellings of one future directory still match.
+ */
+export const canonicalDir = (path: string): string => {
+  const abs = resolve(path);
+  const tail: string[] = [];
+  for (let cur = abs; ; ) {
+    try {
+      return join(realpathSync.native(cur), ...tail.reverse());
+    } catch {
+      const parent = dirname(cur);
+      if (parent === cur) return abs;
+      tail.push(basename(cur));
+      cur = parent;
+    }
+  }
+};
+
 export const loadConfig = async (path = configPath(), home = homedir()): Promise<DoriConfig> => {
   const file = Bun.file(path);
   const raw = (await file.exists()) ? ((await file.json()) as Partial<DoriConfig>) : {};
@@ -96,7 +116,8 @@ export const loadConfig = async (path = configPath(), home = homedir()): Promise
   if (leadSession && !merged.herdrSession) throw new Error("config leadSession needs herdrSession: without it this instance's own session is whatever the caller's environment says");
   const stateDir = expandHome(process.env.DORI_STATE_DIR ?? merged.stateDir, home);
   const peerStateDirs = merged.peerStateDirs.map((d) => expandHome(d, home));
-  if (peerStateDirs.includes(stateDir)) throw new Error(`config peerStateDirs lists this instance's own stateDir ${stateDir}: its lanes would be listed twice, once as peer`);
+  const ownDir = canonicalDir(stateDir);
+  if (peerStateDirs.some((d) => canonicalDir(d) === ownDir)) throw new Error(`config peerStateDirs lists this instance's own stateDir ${stateDir}: its lanes would be listed twice, once as peer`);
   return {
     ...merged,
     stateDir,

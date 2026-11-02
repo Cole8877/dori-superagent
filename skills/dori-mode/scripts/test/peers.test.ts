@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
 
 import { loadConfig } from "../src/config.ts";
 import { watchTick } from "../src/done-flow.ts";
@@ -74,4 +74,37 @@ test("peerStateDirs expands ~, defaults to none, and refuses this instance's own
   expect((await loadConfig(path, "/home/ana")).peerStateDirs).toEqual(["/home/ana/.dori/state-omp"]);
   await Bun.write(path, JSON.stringify({ stateDir: "~/.dori/state-omo", peerStateDirs: ["/home/ana/.dori/state-omo"] }));
   await expect(loadConfig(path, "/home/ana")).rejects.toThrow("config peerStateDirs lists this instance's own stateDir");
+});
+
+test("peerStateDirs refuses this instance's own stateDir under any spelling: slash, dot segments, relative path, symlink, even before it exists", async () => {
+  const path = join(own.dir, "c.json");
+  const link = join(peer.dir, "link");
+  symlinkSync(own.dir, link);
+  const refusal = "config peerStateDirs lists this instance's own stateDir";
+  for (const spelling of [`${own.dir}/`, `${own.dir}/x/..`, relative(process.cwd(), own.dir), link, `${link}/`]) {
+    await Bun.write(path, JSON.stringify({ stateDir: own.dir, peerStateDirs: [spelling] }));
+    await expect(loadConfig(path, "/home/ana")).rejects.toThrow(refusal);
+  }
+  const future = join(own.dir, "not-yet");
+  await Bun.write(path, JSON.stringify({ stateDir: future, peerStateDirs: [join(link, "not-yet")] }));
+  await expect(loadConfig(path, "/home/ana")).rejects.toThrow(refusal);
+  expect(existsSync(future)).toBe(false);
+  await Bun.write(path, JSON.stringify({ stateDir: own.dir, peerStateDirs: [peer.dir] }));
+  expect((await loadConfig(path, "/home/ana")).peerStateDirs).toEqual([peer.dir]);
+});
+
+test("a peer lane that is not a lane, or a peer lanes path that cannot be listed, is reported without breaking own sync or the other peers", async () => {
+  await new Registry(own.dir).write(lane("own-lane"));
+  await new Registry(peer.dir).write(lane("peer-open"));
+  const lanes = join(peer.dir, "lanes");
+  const bad = { "null.json": "null", "array.json": "[]", "number.json": "7", "nokey.json": '{"thread":"chan/1"}', "nothread.json": '{"key":"k"}' };
+  for (const [f, body] of Object.entries(bad)) writeFileSync(join(lanes, f), body);
+  const fileLanes = join(peer.dir, "file-peer");
+  mkdirSync(fileLanes);
+  writeFileSync(join(fileLanes, "lanes"), "not a directory");
+  const deps = depsFor(world, fakeClock(T0), own.dir, { peerStateDirs: [fileLanes, peer.dir] });
+  const r = await syncRegistry(deps, true);
+  expect(r.rows.map((x) => x.key)).toEqual(["own-lane"]);
+  expect(r.peers.map((x) => x.key)).toEqual(["peer-open"]);
+  expect([...r.peerUnreadable].sort()).toEqual([join(fileLanes, "lanes"), ...Object.keys(bad).map((f) => join(lanes, f))].sort());
 });

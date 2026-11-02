@@ -56,24 +56,35 @@ export type PeerLanes = { readonly lanes: Lane[]; readonly unreadable: string[] 
 
 /**
  * Open lanes of another dori instance. Read-only: unlike `Registry`, it never creates the directory, and a
- * missing directory is no lanes. A file that does not parse is reported, not fatal, so a peer cannot break this
- * instance's own sync.
+ * missing directory is no lanes. A file that does not parse, a value that is not a lane, or a lanes path that cannot
+ * be listed is reported, not fatal, so a peer cannot break this instance's own sync.
  */
 export const readPeerLanes = async (stateDir: string): Promise<PeerLanes> => {
   const dir = join(stateDir, "lanes");
   if (!existsSync(dir)) return { lanes: [], unreadable: [] };
   const lanes: Lane[] = [];
   const unreadable: string[] = [];
-  for (const f of readdirSync(dir)) {
+  let files: string[];
+  try {
+    files = readdirSync(dir);
+  } catch {
+    return { lanes: [], unreadable: [dir] };
+  }
+  for (const f of files) {
     if (!f.endsWith(".json")) continue;
     try {
-      lanes.push((await Bun.file(join(dir, f)).json()) as Lane);
+      const value: unknown = await Bun.file(join(dir, f)).json();
+      if (!isPeerLane(value)) throw new Error("not a lane");
+      if (statusOf(value) !== "closed") lanes.push(value);
     } catch {
       unreadable.push(join(dir, f));
     }
   }
-  return { lanes: lanes.filter((l) => statusOf(l) !== "closed"), unreadable };
+  return { lanes, unreadable };
 };
+
+/** The fields `sync` prints for a peer row; anything else in a peer file is not read. */
+const isPeerLane = (v: unknown): v is Lane => typeof v === "object" && v !== null && typeof (v as Lane).key === "string" && typeof (v as Lane).thread === "string";
 
 export class Registry {
   readonly dir: string;
